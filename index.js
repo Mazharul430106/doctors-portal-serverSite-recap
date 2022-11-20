@@ -8,30 +8,44 @@ app.use(cors());
 app.use(express.json());
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.qm6ghoc.mongodb.net/?retryWrites=true&w=majority`;
-console.log(uri);
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
 const run = async() => {
     try{
         const appointmentCollections = client.db('doctorsPortalTwo').collection('appointmentInfo');
+        const bookingCollection = client.db('doctorsPortalTwo').collection('bookings');
+
         app.get('/appointments', async(req, res)=>{
+            const date = req.query.date;
+            // console.log(date);
             const query = {};
-            const cursor = appointmentCollections.find(query);
-            const result = await cursor.toArray();
-            res.send(result);
+            const options = await appointmentCollections.find(query).toArray();
+            const bookingDate = {appointmentDate: date};
+            const alreadyBooked = await bookingCollection.find(bookingDate).toArray();
+            options.forEach(option=> {
+                const optionBooked = alreadyBooked.filter(book=> book.treatement === option.name);
+                const bookedSlot = optionBooked.map(book=> book.slot);
+                const reminingSolts = option.slots.filter(slot=> !bookedSlot.includes(slot));
+                option.slots = reminingSolts;
+            })
+
+            res.send(options);
         })
+
+        app.post('/bookings', async(req, res)=>{
+            const booking = req.body;
+            const bookings = await bookingCollection.insertOne(booking);
+            res.send(bookings)
+        })
+
     }
     finally{
 
     }
 }
 run().catch( error=> console.error(error))
-
-
-
-
 
 
 
